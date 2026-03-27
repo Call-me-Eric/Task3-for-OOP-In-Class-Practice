@@ -13,10 +13,10 @@ int classExample(string str)
 ## extractedQuote
 
 ```cpp
-vector<string> extractedQuote()
+ extractedQuote()
 ```
 
-需要自行输入一行（按照PDF的要求，分别使用>>,getline()实现），并返回PDF要求的结果（以vector传回，第一个元素是first name,第二个元素是last name,第三个元素是quote）
+需要自行输入一行（按照PDF的要求，分别使用>>,getline()实现），并按照PDF的要求输出结果。
 
 ## FileStream
 
