@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <cctype>
 
 void FileStream(std::string Filename) {
     std::ofstream outFile(Filename);
@@ -40,11 +41,26 @@ int countWords(std::string Filename,std::string pattern)
 
     int count = 0;
     std::string word;
+    
+    for(int i=0; i<pattern.size(); i++){
+        pattern[i] = tolower(pattern[i]);
+    }
+
     while (inFile >> word) {
-        if (word == pattern) {
+        std::string temp;
+
+        for(int i=0; i<word.size(); i++){
+            char c = word[i];
+            if(isalpha(c)){
+                temp += tolower(c);
+            }
+        }
+
+        if(temp == pattern){
             count++;
         }
     }
+    
     inFile.close();
     return count;
 }
