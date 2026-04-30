@@ -48,10 +48,7 @@ private:
     Tensor<float> cls_token;
     Tensor<float> pos_embedding;
 public:
-    PatchEmbedding()
-        : projection(_in_channels * _patch_h * _patch_w, _hidden_dim),
-          cls_token({1, 1, _hidden_dim}),
-          pos_embedding({1, NUM_PATCHES + 1, _hidden_dim})
+    PatchEmbedding():cls_token({1, 1, _hidden_dim}),pos_embedding({1, NUM_PATCHES + 1, _hidden_dim})
     {
         for (size_t h = 0; h < _hidden_dim; ++h)
         {
@@ -65,6 +62,7 @@ public:
             }
         }
     }
+    PatchEmbedding(Tensor<float> cls_token, Tensor<float> pos_embedding):cls_token(cls_token),pos_embedding(pos_embedding){}
     Tensor<float> forward(const Tensor<float>& x)
     {
         
