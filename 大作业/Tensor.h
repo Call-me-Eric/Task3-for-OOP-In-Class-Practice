@@ -37,7 +37,6 @@ public:
     Tensor<T> operator+(const Tensor<T>& other) const;
 
     Tensor<T> broadcast(const std::vector<size_t>& new_shape) const;
-    Tensor<T> concatenate(const Tensor<T>& other, size_t dim) const;
 
     void he_normal_init(size_t in_feature,size_t out_feature)
     {

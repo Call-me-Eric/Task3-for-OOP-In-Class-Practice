@@ -35,46 +35,38 @@ public:
 /*
 PatchEmbedding类通过将1\times 28\times 28的图像转换成16个7\times 7的Patch，映射到hidden_dim=32维向量上，以供下一步Transformer学习。
 同时需要加一个CLS token用于学习。
-输入[B, 28, 28],输出[B, patch_num=16 + CLS_num=1, hidden_dim=32]
+输入[B, 28, 28],输出[1, patch_num=16 + CLS_num=1, hidden_dim=32]
 */
 class PatchEmbedding : public Layer
 {
 private:
-    static const int PATCH_SIZE = 7;
-    static const int HIDDEN_DIM = 32;
+    static const int _patch_h = 7, _patch_w = 7;
+    static const int _in_channels = 1;
+    static const int _hidden_dim = 32;
     static const int NUM_PATCHES = 16;
     Linear projection;
     Tensor<float> cls_token;
     Tensor<float> pos_embedding;
 public:
-    PatchEmbedding() : projection(PATCH_SIZE * PATCH_SIZE, HIDDEN_DIM)
+    PatchEmbedding()
+        : projection(_in_channels * _patch_h * _patch_w, _hidden_dim),
+          cls_token({1, 1, _hidden_dim}),
+          pos_embedding({1, NUM_PATCHES + 1, _hidden_dim})
     {
-        cls_token = Tensor<float>({1, 1, HIDDEN_DIM});
-        pos_embedding = Tensor<float>({1,NUM_PATCHES + 1,HIDDEN_DIM});
+        for (size_t h = 0; h < _hidden_dim; ++h)
+        {
+            cls_token(0, 0, h) = 0.0f;
+        }
+        for (size_t p = 0; p < NUM_PATCHES + 1; ++p)
+        {
+            for (size_t h = 0; h < _hidden_dim; ++h)
+            {
+                pos_embedding(0, p, h) = 0.0f;
+            }
+        }
     }
     Tensor<float> forward(const Tensor<float>& x)
     {
-        size_t B = x.shape()[0];
-        // 将输入 [B, 28, 28] 重塑为 [B, 16, 49]
-
-        Tensor<float> patches = x.reshaped({B, NUM_PATCHES, PATCH_SIZE * PATCH_SIZE});
-        // 展平为 [B*16, 49] 以通过线性层
-        patches = patches.reshaped({B * NUM_PATCHES, PATCH_SIZE * PATCH_SIZE});
-        // 通过投影层得到 [B*16, 32]
-        Tensor<float> embedded = projection.forward(patches);
-        // 重塑回 [B, 16, 32]
-        embedded = embedded.reshaped({B, NUM_PATCHES, HIDDEN_DIM});
-        // 手动广播 CLS token 到 [B, 1, 32]
-        Tensor<float> cls_expanded({B, 1, HIDDEN_DIM});
-        for (size_t b = 0; b < B; ++b) {
-            for (size_t j = 0; j < HIDDEN_DIM; ++j) {
-                cls_expanded(b, 0, j) = cls_token(0, 0, j);
-            }
-        }
-        // 使用 concat 在维度 1 上拼接，得到 [B, 17, 32]
-        Tensor<float> with_cls = Tensor<float>::concat({embedded, cls_expanded}, 1);
-        // 添加位置嵌入
-        Tensor<float> output = with_cls + pos_embedding;
-        return output;
+        
     }
 };
