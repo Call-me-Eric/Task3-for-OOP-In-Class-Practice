@@ -104,3 +104,12 @@ public:
         return output;
     }
 };
+
+class LayerNorm : public Layer
+{
+    public:
+    Tensor<float> forward(const Tensor<float> &x)
+    {
+        return x.softmax(x.size() - 1);
+    }
+};
