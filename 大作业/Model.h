@@ -10,6 +10,28 @@ public:
     virtual Tensor<float> forward(const Tensor<float>& x) = 0;
     virtual ~Layer() = default;
 };
+template <class T>
+std::vector<size_t> Tensor<T>::index_to_coordinates(size_t idx) const
+{
+    if (idx >= _data.size())
+    {
+        throw std::out_of_range("Index is out of range of tensor data.");
+    }
+    std::vector<size_t> coordinates(_shape.size());
+    size_t remaining = idx;
+    for (size_t i = 0; i < _strides.size(); ++i) {
+        coordinates[i] = remaining / _strides[i];
+        remaining = remaining % _strides[i];
+    }
+    return coordinates;
+}
+template <class T>
+Tensor<T> Tensor<T>::bias_add(const Tensor<T> &other)const
+{
+    Tensor<T> ans = *this;
+    for(int i = 0;i < ans._data.size();i++)ans._data[i] += other[index_to_coordinates(i).back()];
+    return ans;
+}
 
 class Linear : public Layer//linear线性层类
 {
@@ -37,6 +59,7 @@ PatchEmbedding类通过将1\times 28\times 28的图像转换成16个7\times 7的
 同时需要加一个CLS token用于学习。
 输入[B, 28, 28],输出[1, patch_num=16 + CLS_num=1, hidden_dim=32]
 */
+
 class PatchEmbedding : public Layer
 {
 private:
@@ -47,6 +70,7 @@ private:
     Linear projection;
     Tensor<float> cls_token;
     Tensor<float> pos_embedding;
+    Linear linear;
 public:
     PatchEmbedding():cls_token({1, 1, _hidden_dim}),pos_embedding({1, NUM_PATCHES + 1, _hidden_dim})
     {
@@ -62,9 +86,30 @@ public:
             }
         }
     }
-    PatchEmbedding(Tensor<float> cls_token, Tensor<float> pos_embedding):cls_token(cls_token),pos_embedding(pos_embedding){}
+    PatchEmbedding(Tensor<float> cls_token, Tensor<float> pos_embedding,Linear Linear):cls_token(cls_token),pos_embedding(pos_embedding),linear(linear){}
     Tensor<float> forward(const Tensor<float>& x)
     {
-        
+        size_t B = x.shape()[0];
+        Tensor<float> output = Tensor<float>({B,1,_hidden_dim});
+        for(int b = 0;b < B;b++)
+        {
+            for(int i = 0;i < _hidden_dim;i++)output(b,0,i) = cls_token(i);
+            for(int i = 0;i < x.shape()[1];i += _patch_h)
+                for(int j = 0;j < x.shape()[2];j += _patch_w)
+                {
+                    auto slice = x.slice(1,i,i + _patch_h - 1).slice(2,j,j + _patch_w - 1);
+                    Tensor<float>::concat({output,(linear.forward(slice)).bias_add(pos_embedding)},1);
+                }
+        }
+        return output;
+    }
+};
+
+class LayerNorm : public Layer
+{
+    public:
+    Tensor<float> forward(const Tensor<float> &x)
+    {
+        return x.softmax(x.size() - 1);
     }
 };

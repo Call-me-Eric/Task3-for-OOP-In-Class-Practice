@@ -30,7 +30,7 @@ main.cpp 由 @bianbiandaren 完成
 
 1. Layer 抽象基类 done
 2. Linear 线性层类（用于完成“仿射变换”）done
-3. PatchEmbedding 类（用于将$28\times 28$的灰度图转换成32维向量）
+3. PatchEmbedding 类（用于将$28\times 28$的灰度图转换成32维向量）done
    1. 根据助教说，cls_token等会提前给出，可能需要写main.cpp的同学对接一下
 4. LayerNorm 类（用于做矩阵乘法和加法的线性变换）
 5. MultiHeadAttention 类（还没看）

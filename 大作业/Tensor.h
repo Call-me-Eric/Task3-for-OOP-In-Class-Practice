@@ -44,6 +44,7 @@ private:
 public:
     //默认构造
     Tensor() = default;
+<<<<<<< HEAD
 
     //形状构造
     Tensor(const vector<size_t>& shape):_shape(shape){
@@ -358,7 +359,6 @@ public:
         }
         return result;
     }
-
     void he_normal_init(size_t in_feature,size_t out_feature)
     {
         *this = Tensor<T>({in_feature, out_feature});

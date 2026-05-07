@@ -49,9 +49,10 @@ $+$ 是 $bias\_add$，表示将 $\forall (x_1,x_2,\dots,x_n),A(x_1,x_2,\dots,x_n
 
 ### 对于构造方法
 
-
 1. ~~什么都不传，然后会构造出最基础的类~~。已停用，因为助教说会给参数。
-2. 传入Tensor\<float> cls\_token,Tensor\<float> pos\_embedding，然后直接调用这个参数。
+2. 传入Tensor\<float> cls\_token,Tensor\<float> pos\_embedding,Linear linear，然后直接调用这些参数。需要在loader中写。
+
+我们约定，cls\_token和pos\_embedding都形如 $\{hidden\_dim\}$，linear的构造见Linear类。
 
 ### 对于forward方法
 
@@ -65,6 +66,16 @@ Tensor<float> forward(const Tensor<float>& x);
 
 首先，我们会将image分割成$4\times 4$ 个patches，然后对每个patch，将其flatten()展平成形如 $\{49\}$ 的向量（张量）。
 
-接下来我们通过$Linear(\{49,32\},\{1,32\}).forward(\{49\})$ 将其转换成 $\{32\}$的token。 
+接下来我们通过$Linear(\{49,32\},\{1,32\}).forward(\{49\})$ 将其转换成 $\{32\}$的token。
 
-将所有的token组合起来，便成为最终的输出。
+其中的Linear(\_weight,\_bias)参数由助教给出，文件名待定。
+
+将所有的token组合起来，同时在前面加上一个特殊的CLS token，便成为最终的输出。
+
+## LayerNorm类
+
+归一化，通过softmax函数，将最后一维的总和保持在1，可能需要通过调用Tensor.h中的softmax函数。
+
+## MultiHeadAttention类
+
+
