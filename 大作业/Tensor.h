@@ -1,6 +1,9 @@
 #include<vector>
 #include<cmath>
 #include<random>
+#include<numeric>
+#include<cstring>
+#include<stdexcept>
 using namespace std;
 
 template <class T>
@@ -11,7 +14,7 @@ private:
     vector<size_t> _strides;
 
     //步长
-    void compute_strdes(){
+    void compute_strides(){
         _strides.resize(_shape.size(),1);
 
         for(int i=_shape.size()-2;i>=0;i--){
@@ -44,7 +47,6 @@ private:
 public:
     //默认构造
     Tensor() = default;
-<<<<<<< HEAD
 
     //形状构造
     Tensor(const vector<size_t>& shape):_shape(shape){
@@ -119,7 +121,7 @@ public:
 
     //维度重排
     Tensor<T> permute(const vector<size_t>& dims) const{
-        if(dims.size()!=shape.size()){
+        if(dims.size()!=_shape.size()){
             throw invalid_argument("permute维度必须与原维度一致");
         }
         vector<size_t> new_shape,new_strides;
@@ -285,7 +287,7 @@ public:
     size_t argmax() const{
         if(_data.empty())   throw logic_error("空张量无法argmax");
         size_t idx=0;
-        for(size_t i=0;i<_data.size();++i){
+        for(size_t i=1 ;i<_data.size();++i){
             if(_data[i]>_data[idx]) idx=i;
         }
         return idx;
@@ -297,7 +299,7 @@ public:
         vector<size_t> shape2=other._shape;
 
         while(shape1.size()<shape2.size()) shape1.insert(shape1.begin(),1);
-        while(shape2.size()<shape1.size()) shape2.insert(shape1.begin(),1);
+        while(shape2.size()<shape1.size()) shape2.insert(shape2.begin(),1);
 
         vector<size_t> result_shape;
         for (size_t i=0;i<shape1.size();++i){
@@ -325,8 +327,8 @@ public:
 
             res._data[i]=_data[i1]+other._data[i2];
 
-            for (int d=(int)idx.size()-1;d>=0;--d){
-                if (++idx[d]<res_shape[d]) break;
+            for(int d=(int)idx.size()-1;d>=0;--d){
+                if(++idx[d]<result_shape[d]) break;
                 idx[d]=0;
             }
         }
