@@ -2,55 +2,72 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <sstream>
 #include <stdexcept>
+#include <cstdio>
+#include <algorithm>
 
-// #include "Tensor.h"
 #include "Model.h"
 
 using namespace std;
 
-// ==============================
-// 工具函数：加载二进制张量文件
-// ==============================
 Tensor<float> load_tensor(const string& filepath)
 {
-    ifstream file(filepath, ios::binary);
+    ifstream file(filepath);
     if (!file.is_open()) {
-        throw runtime_error("无法打开权重文件: " + filepath);
+        throw runtime_error("Failed to open weight file: " + filepath);
     }
 
-    // 读取维度数
-    size_t rank;
-    if (!file.read(reinterpret_cast<char*>(&rank), sizeof(rank))) {
-        throw runtime_error("读取张量维度失败: " + filepath);
+    vector<float> data;
+    string line;
+    int rows = 0, cols = 0;
+
+    // 读取 shape
+    getline(file, line);
+    int parsed = sscanf(line.c_str(), "# shape: %d %d", &rows, &cols);
+
+    if (parsed == 1 && rows > 0) {
+        cols = rows;  // 1D bias，当作 (1, N)
+        rows = 1;
+    } else if (parsed != 2 || rows <= 0 || cols <= 0) {
+        throw runtime_error("Invalid shape in file: " + filepath +
+                            " (line=[" + line + "])");
     }
 
-    // 读取形状
-    vector<size_t> shape(rank);
-    if (!file.read(reinterpret_cast<char*>(shape.data()), rank * sizeof(size_t))) {
-        throw runtime_error("读取张量形状失败: " + filepath);
-    }
-
-    // 读取数据
-    Tensor<float> tensor(shape);
-    if (tensor.size() > 0) {
-        if (!file.read(reinterpret_cast<char*>(&tensor[0]), tensor.size() * sizeof(float))) {
-            throw runtime_error("读取张量数据失败: " + filepath);
+    // 读取所有数据
+    while (getline(file, line)) {
+        istringstream iss(line);
+        float val;
+        while (iss >> val) {
+            data.push_back(val);
         }
     }
 
     file.close();
+
+    vector<size_t> shape = {(size_t)rows, (size_t)cols};
+    Tensor<float> tensor(shape);
+
+    if (data.size() != tensor.size()) {
+        cerr << "[WARN] " << filepath << ": expected " << tensor.size()
+             << " values but got " << data.size() << endl;
+    }
+    size_t n = min(data.size(), tensor.size());
+    for (size_t i = 0; i < n; ++i) {
+        tensor[i] = data[i];
+    }
+
     return tensor;
 }
 
 // ==============================
-// 加载 MNIST 28x28 灰度图像
+// 读取 MNIST 28x28 图像
 // ==============================
 Tensor<float> load_image(const string& path)
 {
     ifstream file(path, ios::binary);
     if (!file.is_open()) {
-        throw runtime_error("无法打开图像文件: " + path);
+        throw runtime_error("Failed to open image file: " + path);
     }
 
     Tensor<float> img({1, 28, 28});
@@ -59,7 +76,7 @@ Tensor<float> load_image(const string& path)
     for (int i = 0; i < 28; ++i) {
         for (int j = 0; j < 28; ++j) {
             if (!file.read(reinterpret_cast<char*>(&pix), 1)) {
-                throw runtime_error("图像像素读取异常");
+                throw runtime_error("Failed to read image pixels");
             }
             img(0, i, j) = static_cast<float>(pix) / 255.0f;
         }
@@ -70,7 +87,7 @@ Tensor<float> load_image(const string& path)
 }
 
 // ==============================
-// 加载单个 Transformer Block
+// 加载 Transformer Block
 // ==============================
 TransformerBlock load_block(const string& wdir, int idx,
                             size_t hidden_dim, size_t num_heads, size_t mlp_dim)
@@ -78,23 +95,21 @@ TransformerBlock load_block(const string& wdir, int idx,
     TransformerBlock block(hidden_dim, num_heads, mlp_dim);
     string prefix = wdir + "/block" + to_string(idx);
 
-    // 注意力层权重
-    auto q_w = load_tensor(prefix + "_q_weight.bin");
-    auto q_b = load_tensor(prefix + "_q_bias.bin");
-    auto k_w = load_tensor(prefix + "_k_weight.bin");
-    auto k_b = load_tensor(prefix + "_k_bias.bin");
-    auto v_w = load_tensor(prefix + "_v_weight.bin");
-    auto v_b = load_tensor(prefix + "_v_bias.bin");
-    auto out_w = load_tensor(prefix + "_out_weight.bin");
-    auto out_b = load_tensor(prefix + "_out_bias.bin");
+    auto q_w = load_tensor(prefix + "_attn.q.weight.wts");
+    auto q_b = load_tensor(prefix + "_attn.q.bias.wts");
+    auto k_w = load_tensor(prefix + "_attn.k.weight.wts");
+    auto k_b = load_tensor(prefix + "_attn.k.bias.wts");
+    auto v_w = load_tensor(prefix + "_attn.v.weight.wts");
+    auto v_b = load_tensor(prefix + "_attn.v.bias.wts");
+    auto out_w = load_tensor(prefix + "_attn.out.weight.wts");
+    auto out_b = load_tensor(prefix + "_attn.out.bias.wts");
 
     block.set_attention_weights(q_w, q_b, k_w, k_b, v_w, v_b, out_w, out_b);
 
-    // MLP 层权重
-    auto fc1_w = load_tensor(prefix + "_fc1_weight.bin");
-    auto fc1_b = load_tensor(prefix + "_fc1_bias.bin");
-    auto fc2_w = load_tensor(prefix + "_fc2_weight.bin");
-    auto fc2_b = load_tensor(prefix + "_fc2_bias.bin");
+    auto fc1_w = load_tensor(prefix + "_mlp.fc1.weight.wts");
+    auto fc1_b = load_tensor(prefix + "_mlp.fc1.bias.wts");
+    auto fc2_w = load_tensor(prefix + "_mlp.fc2.weight.wts");
+    auto fc2_b = load_tensor(prefix + "_mlp.fc2.bias.wts");
 
     block.set_mlp_weights(fc1_w, fc1_b, fc2_w, fc2_b);
 
@@ -102,7 +117,7 @@ TransformerBlock load_block(const string& wdir, int idx,
 }
 
 // ==============================
-// 主函数：ViT 推理入口
+// 主函数
 // ==============================
 int main(int argc, char* argv[])
 {
@@ -113,12 +128,9 @@ int main(int argc, char* argv[])
     }
 
     try {
-        string img_path  = argv[1];
+        string img_path = argv[1];
         string weight_dir = argv[2];
 
-        // ==============================
-        // 实验指定超参数（完全按要求）
-        // ==============================
         const size_t INPUT_H     = 28;
         const size_t INPUT_W     = 28;
         const size_t PATCH_H     = 7;
@@ -129,60 +141,58 @@ int main(int argc, char* argv[])
         const size_t NUM_LAYERS  = 2;
         const size_t NUM_CLASSES = 10;
 
-        cout << "[INFO] 开始加载图像..." << endl;
+        cout << "[INFO] Loading image..." << endl;
         Tensor<float> image = load_image(img_path);
 
-        cout << "[INFO] 加载 PatchEmbedding 权重..." << endl;
-        auto patch_w    = load_tensor(weight_dir + "/patch_weight.bin");
-        auto patch_b    = load_tensor(weight_dir + "/patch_bias.bin");
-        auto cls_token  = load_tensor(weight_dir + "/cls_token.bin");
-        auto pos_embed  = load_tensor(weight_dir + "/pos_embed.bin");
+        cout << "[INFO] Loading PatchEmbedding weights..." << endl;
+        auto patch_w = load_tensor(weight_dir + "/patch.weight.wts");
+        auto patch_b = load_tensor(weight_dir + "/patch.bias.wts");
+
+        auto cls_token = load_tensor(weight_dir + "/cls_token.wts");
+        cls_token.reshape({1, 1, HIDDEN_DIM});
+
+        auto pos_embed = load_tensor(weight_dir + "/pos_embed.wts");
+        pos_embed.reshape({1, (INPUT_H / PATCH_H) * (INPUT_W / PATCH_W) + 1, HIDDEN_DIM});
 
         Linear patch_proj(patch_w, patch_b);
         PatchEmbedding patch_embed(cls_token, pos_embed, patch_proj,
                                    INPUT_H, INPUT_W, PATCH_H, PATCH_W);
 
-        cout << "[INFO] 构建 VisionTransformer..." << endl;
+        cout << "[INFO] Building VisionTransformer..." << endl;
         VisionTransformer vit(INPUT_H, INPUT_W, PATCH_H, PATCH_W,
                               HIDDEN_DIM, NUM_HEADS, MLP_DIM,
                               NUM_LAYERS, NUM_CLASSES);
         vit.set_patch_embedding(patch_embed);
 
-        cout << "[INFO] 加载 " << NUM_LAYERS <<  " 层 Transformer Block..." << endl;
+        cout << "[INFO] Loading " << NUM_LAYERS << " Transformer blocks..." << endl;
         for (size_t i = 0; i < NUM_LAYERS; ++i) {
             TransformerBlock block = load_block(weight_dir, static_cast<int>(i),
                                                 HIDDEN_DIM, NUM_HEADS, MLP_DIM);
             vit.set_block(i, block);
         }
 
-        cout << "[INFO] 加载分类头权重..." << endl;
-        auto head_w = load_tensor(weight_dir + "/head_weight.bin");
-        auto head_b = load_tensor(weight_dir + "/head_bias.bin");
+        cout << "[INFO] Loading classification head..." << endl;
+        auto head_w = load_tensor(weight_dir + "/head.weight.wts");
+        auto head_b = load_tensor(weight_dir + "/head.bias.wts");
         vit.set_head(head_w, head_b);
 
-        // ==============================
-        // 前向推理
-        // ==============================
-        cout << "[INFO] 模型前向推理中..." << endl;
+        cout << "[INFO] Running forward inference..." << endl;
         Tensor<float> logits = vit.forward(image);
         int predict = static_cast<int>(logits.argmax() % 10);
 
-        // ==============================
-        // 输出结果
-        // ==============================
         cout << "\n=============================================" << endl;
-        cout << "           MNIST 手写数字识别结果            " << endl;
+        cout << "           MNIST Digit Recognition Result     " << endl;
         cout << "=============================================" << endl;
-        cout << "预测数字： " << predict << endl;
-        cout << "原始 logits：";
+        cout << "Predicted digit: " << predict << endl;
+        cout << "Raw logits:     ";
         for (size_t i = 0; i < 10; ++i) {
             cout << logits[i] << "  ";
         }
         cout << "\n=============================================" << endl;
-        cout << "[INFO] 推理完成！" << endl;
+        cout << "[INFO] Inference completed!" << endl;
 
     } catch (const exception& e) {
-        cerr << "\n[ERROR] 程序异常：" << endl;
+        cerr << "\n[ERROR] Exception occurred:" << endl;
         cerr << "  " << e.what() << endl;
         return 1;
     }
