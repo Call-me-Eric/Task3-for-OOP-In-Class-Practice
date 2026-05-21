@@ -219,11 +219,6 @@ public:
         return out;
     }
 
-    //偏置加法
-    Tensor<T> bias_add(const Tensor<T>& other) const{
-        return *this+other;
-    }
-
     //矩阵乘法
     Tensor<T> matmul(const Tensor<T>& other) const{
         if(_shape.size()<2||other.rank()<2){
@@ -258,6 +253,11 @@ public:
             }
         }
         return out;
+    }
+
+    //偏置加法
+    Tensor<T> bias_add(const Tensor<T>& other) const{
+        return *this+other;
     }
 
     //指定维度归一化
