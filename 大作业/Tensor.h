@@ -124,16 +124,35 @@ public:
         if(dims.size()!=_shape.size()){
             throw invalid_argument("permute维度必须与原维度一致");
         }
-        vector<size_t> new_shape,new_strides;
-        for(size_t d:dims){
-            new_shape.push_back(_shape[d]);
-            new_strides.push_back(_strides[d]);
+        vector<size_t> new_shape(_shape.size());
+        for(size_t i=0;i<dims.size();++i){
+            if(dims[i]>=_shape.size()){
+                throw invalid_argument("permute维度非法");
+            }
+            new_shape[i]=_shape[dims[i]];
         }
+
         Tensor<T> out(new_shape);
-        memcpy(out._data.data(),_data.data(),_data.size()*sizeof(T));
-        out._strides=new_strides;
+        vector<size_t> out_idx(new_shape.size(),0);
+        for(size_t i=0;i<out.size();++i){
+            size_t remaining=i;
+            for(int d=(int)new_shape.size()-1;d>=0;--d){
+                out_idx[d]=remaining % new_shape[d];
+                remaining/=new_shape[d];
+            }
+
+            vector<size_t> src_idx(new_shape.size());
+            for(size_t d=0;d<new_shape.size();++d){
+                src_idx[dims[d]] = out_idx[d];
+            }
+
+            size_t src_flat=0;
+            for(size_t d=0;d<src_idx.size();++d){
+                src_flat += src_idx[d] * _strides[d];
+            }
+            out._data[i] = _data[src_flat];
+        }
         return out;
-        
     }
 
     //矩阵转置
@@ -199,8 +218,14 @@ public:
         vector<size_t> new_shape=tensors[0].shape();
         size_t total_dim=0;
         for(const auto& t:tensors){
-            if(t.shape()!=new_shape){
-                throw invalid_argument("concat仅指定维度可不同,其余维度必须一致");
+            if(t.rank()!=rank){
+                throw invalid_argument("concat仅支持相同rank的张量");
+            }
+            for(size_t d=0;d<rank;++d){
+                if(d==dim) continue;
+                if(t.shape()[d]!=new_shape[d]){
+                    throw invalid_argument("concat仅指定维度可不同,其余维度必须一致");
+                }
             }
             total_dim+=t.shape()[dim];
         }
@@ -331,6 +356,25 @@ public:
                 if(++idx[d]<result_shape[d]) break;
                 idx[d]=0;
             }
+        }
+        return res;
+    }
+
+    Tensor<T> operator*(T scalar) const{
+        Tensor<T> res(_shape);
+        for(size_t i=0;i<_data.size();++i){
+            res._data[i] = _data[i] * scalar;
+        }
+        return res;
+    }
+
+    Tensor<T> operator/(T scalar) const{
+        if(scalar == T(0)){
+            throw invalid_argument("除以零");
+        }
+        Tensor<T> res(_shape);
+        for(size_t i=0;i<_data.size();++i){
+            res._data[i] = _data[i] / scalar;
         }
         return res;
     }
