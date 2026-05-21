@@ -13,28 +13,13 @@ public:
     virtual Tensor<float> forward(const Tensor<float>& x) = 0;
     virtual ~Layer() = default;
 };
-template <class T>
-std::vector<size_t> Tensor<T>::index_to_coordinates(size_t idx) const
-{
-    if (idx >= _data.size())
-    {
-        throw std::out_of_range("Index is out of range of tensor data.");
-    }
-    std::vector<size_t> coordinates(_shape.size());
-    size_t remaining = idx;
-    for (size_t i = 0; i < _strides.size(); ++i) {
-        coordinates[i] = remaining / _strides[i];
-        remaining = remaining % _strides[i];
-    }
-    return coordinates;
-}
-template <class T>
-Tensor<T> Tensor<T>::bias_add(const Tensor<T> &other)const
-{
-    Tensor<T> ans = *this;
-    for(int i = 0;i < ans._data.size();i++)ans._data[i] += other[index_to_coordinates(i).back()];
-    return ans;
-}
+// template <class T>
+// Tensor<T> Tensor<T>::bias_add(const Tensor<T> &other)const
+// {
+//     Tensor<T> ans = *this;
+//     for(int i = 0;i < ans._data.size();i++)ans._data[i] += other[index_to_coordinates(i).back()];
+//     return ans;
+// }
 
 class Linear : public Layer//linear线性层类
 {

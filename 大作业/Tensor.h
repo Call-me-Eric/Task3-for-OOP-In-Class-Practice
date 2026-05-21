@@ -420,6 +420,19 @@ public:
         *this = Tensor<T>({in_feature, out_feature});
         for(auto &i : _data)i = 0;
     }
-    std::vector<size_t> Tensor<T>::index_to_coordinates(size_t idx) const;
+    std::vector<size_t> index_to_coordinates(size_t idx) const
+    {
+        if (idx >= _data.size())
+        {
+            throw std::out_of_range("Index is out of range of tensor data.");
+        }
+        std::vector<size_t> coordinates(_shape.size());
+        size_t remaining = idx;
+        for (size_t i = 0; i < _strides.size(); ++i) {
+            coordinates[i] = remaining / _strides[i];
+            remaining = remaining % _strides[i];
+        }
+        return coordinates;
+    }
 };
 
