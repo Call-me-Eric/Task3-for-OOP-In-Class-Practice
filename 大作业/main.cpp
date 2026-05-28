@@ -141,55 +141,64 @@ int main(int argc, char* argv[])
         const size_t NUM_LAYERS  = 2;
         const size_t NUM_CLASSES = 10;
 
-        cout << "[INFO] Loading image..." << endl;
+        cerr << "[INFO] Loading image..." << endl;
         Tensor<float> image = load_image(img_path);
 
-        cout << "[INFO] Loading PatchEmbedding weights..." << endl;
+        cerr << "[INFO] Loading PatchEmbedding weights..." << endl;
+        
         auto patch_w = load_tensor(weight_dir + "/patch.weight.wts");
+        cerr << "[INFO] patch.weight.wts load successful" << endl;
         auto patch_b = load_tensor(weight_dir + "/patch.bias.wts");
+        cerr << "[INFO] patch.bias.wts load successful" << endl;
 
         auto cls_token = load_tensor(weight_dir + "/cls_token.wts");
+        cerr << "[INFO] cls_token.wts load successful" << endl;
+        cerr << "[INFO] cls_token reshaped to {1, 1, " << HIDDEN_DIM << "}";
         cls_token.reshape({1, 1, HIDDEN_DIM});
+        cerr << "successful" << endl;
 
         auto pos_embed = load_tensor(weight_dir + "/pos_embed.wts");
+        cerr << "[INFO] pos_embed.wts load successful" << endl;
+        cerr << "[INFO] pos_embed begin to reshape to {1, " << (INPUT_H / PATCH_H) * (INPUT_W / PATCH_W) + 1 << ", " << HIDDEN_DIM << "}";
         pos_embed.reshape({1, (INPUT_H / PATCH_H) * (INPUT_W / PATCH_W) + 1, HIDDEN_DIM});
+        cerr << "successful" << endl;
 
         Linear patch_proj(patch_w, patch_b);
         PatchEmbedding patch_embed(cls_token, pos_embed, patch_proj,
                                    INPUT_H, INPUT_W, PATCH_H, PATCH_W);
 
-        cout << "[INFO] Building VisionTransformer..." << endl;
+        cerr << "[INFO] Building VisionTransformer..." << endl;
         VisionTransformer vit(INPUT_H, INPUT_W, PATCH_H, PATCH_W,
                               HIDDEN_DIM, NUM_HEADS, MLP_DIM,
                               NUM_LAYERS, NUM_CLASSES);
         vit.set_patch_embedding(patch_embed);
 
-        cout << "[INFO] Loading " << NUM_LAYERS << " Transformer blocks..." << endl;
+        cerr << "[INFO] Loading " << NUM_LAYERS << " Transformer blocks..." << endl;
         for (size_t i = 0; i < NUM_LAYERS; ++i) {
             TransformerBlock block = load_block(weight_dir, static_cast<int>(i),
                                                 HIDDEN_DIM, NUM_HEADS, MLP_DIM);
             vit.set_block(i, block);
         }
 
-        cout << "[INFO] Loading classification head..." << endl;
+        cerr << "[INFO] Loading classification head..." << endl;
         auto head_w = load_tensor(weight_dir + "/head.weight.wts");
         auto head_b = load_tensor(weight_dir + "/head.bias.wts");
         vit.set_head(head_w, head_b);
 
-        cout << "[INFO] Running forward inference..." << endl;
+        cerr << "[INFO] Running forward inference..." << endl;
         Tensor<float> logits = vit.forward(image);
         int predict = static_cast<int>(logits.argmax() % 10);
 
-        cout << "\n=============================================" << endl;
-        cout << "           MNIST Digit Recognition Result     " << endl;
-        cout << "=============================================" << endl;
-        cout << "Predicted digit: " << predict << endl;
-        cout << "Raw logits:     ";
+        cerr << "\n=============================================" << endl;
+        cerr << "           MNIST Digit Recognition Result     " << endl;
+        cerr << "=============================================" << endl;
+        cerr << "Predicted digit: " << predict << endl;
+        cerr << "Raw logits:     ";
         for (size_t i = 0; i < 10; ++i) {
-            cout << logits[i] << "  ";
+            cerr << logits[i] << "  ";
         }
-        cout << "\n=============================================" << endl;
-        cout << "[INFO] Inference completed!" << endl;
+        cerr << "\n=============================================" << endl;
+        cerr << "[INFO] Inference completed!" << endl;
 
     } catch (const exception& e) {
         cerr << "\n[ERROR] Exception occurred:" << endl;

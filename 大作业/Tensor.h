@@ -101,12 +101,22 @@ public:
         return _data[to_flat_idx(idx...)];
     }
 
+    //DEBUG: 打印张量信息
+    void print_info() const{
+        cout << "Shape: {";
+        for(size_t i=0;i<_shape.size();++i){
+            cout << _shape[i];
+            if(i!=_shape.size()-1) cout << ", ";
+        }
+        cout << "}, Size: " << size() << endl;
+    }
     //原地修改形状
     void reshape(const vector<size_t>& new_shape){
         size_t old_size=count_elements(_shape);
         size_t new_size=count_elements(new_shape);
         if (old_size!=new_size){
-            throw invalid_argument("reshape前后元素总数必须相等");
+            print_info();
+            throw invalid_argument("reshape前后元素总数必须相等: " + to_string(old_size) + " vs " + to_string(new_size));
         }
         _shape=new_shape;
         compute_strides();

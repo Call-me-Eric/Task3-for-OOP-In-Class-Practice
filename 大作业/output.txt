@@ -1,0 +1,10 @@
+DatasetDict({
+    train: Dataset({
+        features: ['image', 'label'],
+        num_rows: 60000
+    })
+    test: Dataset({
+        features: ['image', 'label'],
+        num_rows: 10000
+    })
+})
