@@ -146,12 +146,34 @@ public:
     }
 };
 
-class LayerNorm : public Layer
-{
-    public:
-    Tensor<float> forward(const Tensor<float> &x)
-    {
-        return x.softmax(x.rank() - 1);
+class LayerNorm : public Layer {
+public:
+    Tensor<float> forward(const Tensor<float>& x) override {
+        Tensor<float> out = x;
+        size_t last_dim = x.shape().back();
+        size_t outer = x.size() / last_dim;
+        
+        for (size_t o = 0; o < outer; ++o) {
+            // 计算均值
+            float mean = 0.0f;
+            for (size_t i = 0; i < last_dim; ++i)
+                mean += out[o * last_dim + i];
+            mean /= last_dim;
+            
+            // 计算方差
+            float var = 0.0f;
+            for (size_t i = 0; i < last_dim; ++i) {
+                float diff = out[o * last_dim + i] - mean;
+                var += diff * diff;
+            }
+            var /= last_dim;
+            
+            // 归一化
+            float std = std::sqrt(var + 1e-5f);
+            for (size_t i = 0; i < last_dim; ++i)
+                out[o * last_dim + i] = (out[o * last_dim + i] - mean) / std;
+        }
+        return out;
     }
 };
 class MultiHeadAttention {
