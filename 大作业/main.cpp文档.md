@@ -180,6 +180,55 @@ Raw logits:     -1.2  0.3  -0.8  ...  2.1
 
 ---
 
+## 图像输入约定
+
+本项目所用输入图像均为**黑底白字**的手写数字图片（与 MNIST 数据集风格一致）。
+
+在传入 `vit_infer.exe` 之前，需先使用 `convert_image.py` 将 PNG 图像转换为程序可读的裸二进制格式：
+
+```bash
+python convert_image.py
+# 按提示输入：
+# 请输入 PNG 文件路径: 大作业\1.png
+# 请输入输出 RAW 文件路径: 大作业\1.raw
+```
+
+转换完成后再执行推理：
+
+```bash
+./vit_infer.exe 1.raw weights
+```
+
+`convert_image.py` 的转换逻辑如下：
+
+```python
+from PIL import Image
+import numpy as np
+
+def png_to_raw(input_png, output_raw):
+    img = Image.open(input_png)
+    img = img.convert("L")      # 转为灰度图
+    img = img.resize((28, 28))  # 缩放至 28×28
+    img_array = np.array(img, dtype=np.uint8)
+    # 黑底白字无需反色，若为白底黑字请取消下一行注释
+    # img_array = 255 - img_array
+    img_array.tofile(output_raw)
+    print(f"转换完成")
+
+if __name__ == "__main__":
+    input_png = input("请输入 PNG 文件路径: ")
+    output_raw = input("请输入输出 RAW 文件路径: ")
+    png_to_raw(input_png, output_raw)
+```
+
+**注意：**
+
+- 输入图片必须为**黑底白字**；若为白底黑字，需在 `convert_image.py` 中启用 `img_array = 255 - img_array` 反色处理
+- `convert_image.py` 会自动将图片缩放至 28×28 并转为灰度图，无需手动预处理
+- 输出的 `.raw` 文件为 784 字节的裸二进制文件，不含任何文件头，直接按行优先顺序存储像素值
+
+---
+
 ## 注意事项
 
 - 所有推理日志输出到 `stderr`，便于与标准输出分离

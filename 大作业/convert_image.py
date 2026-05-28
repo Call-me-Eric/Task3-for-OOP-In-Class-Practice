@@ -6,6 +6,7 @@ def png_to_raw(input_png, output_raw):
     img = img.convert("L")
     img = img.resize((28, 28))
     img_array = np.array(img, dtype=np.uint8)
+    #img_array = 255 - img_array (若为白底黑字，则需要反转颜色)
     img_array.tofile(output_raw)
     print(f"转换完成")
 
