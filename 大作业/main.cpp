@@ -93,23 +93,23 @@ TransformerBlock load_block(const string& wdir, int idx,
                             size_t hidden_dim, size_t num_heads, size_t mlp_dim)
 {
     TransformerBlock block(hidden_dim, num_heads, mlp_dim);
-    string prefix = wdir + "/block" + to_string(idx);
+    string prefix = wdir + "/blocks." + to_string(idx);
 
-    auto q_w = load_tensor(prefix + "_attn.q.weight.wts");
-    auto q_b = load_tensor(prefix + "_attn.q.bias.wts");
-    auto k_w = load_tensor(prefix + "_attn.k.weight.wts");
-    auto k_b = load_tensor(prefix + "_attn.k.bias.wts");
-    auto v_w = load_tensor(prefix + "_attn.v.weight.wts");
-    auto v_b = load_tensor(prefix + "_attn.v.bias.wts");
-    auto out_w = load_tensor(prefix + "_attn.out.weight.wts");
-    auto out_b = load_tensor(prefix + "_attn.out.bias.wts");
+    auto q_w = load_tensor(prefix + ".attn.q.weight.wts");
+    auto q_b = load_tensor(prefix + ".attn.q.bias.wts");
+    auto k_w = load_tensor(prefix + ".attn.k.weight.wts");
+    auto k_b = load_tensor(prefix + ".attn.k.bias.wts");
+    auto v_w = load_tensor(prefix + ".attn.v.weight.wts");
+    auto v_b = load_tensor(prefix + ".attn.v.bias.wts");
+    auto out_w = load_tensor(prefix + ".attn.o.weight.wts");
+    auto out_b = load_tensor(prefix + ".attn.o.bias.wts");
 
     block.set_attention_weights(q_w, q_b, k_w, k_b, v_w, v_b, out_w, out_b);
 
-    auto fc1_w = load_tensor(prefix + "_mlp.fc1.weight.wts");
-    auto fc1_b = load_tensor(prefix + "_mlp.fc1.bias.wts");
-    auto fc2_w = load_tensor(prefix + "_mlp.fc2.weight.wts");
-    auto fc2_b = load_tensor(prefix + "_mlp.fc2.bias.wts");
+    auto fc1_w = load_tensor(prefix + ".mlp.fc1.weight.wts");
+    auto fc1_b = load_tensor(prefix + ".mlp.fc1.bias.wts");
+    auto fc2_w = load_tensor(prefix + ".mlp.fc2.weight.wts");
+    auto fc2_b = load_tensor(prefix + ".mlp.fc2.bias.wts");
 
     block.set_mlp_weights(fc1_w, fc1_b, fc2_w, fc2_b);
 
