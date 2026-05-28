@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <cstdio>
 #include <algorithm>
+#include <cstdlib>
 
 #include "Model.h"
 
@@ -65,24 +66,53 @@ Tensor<float> load_tensor(const string& filepath)
 // ==============================
 Tensor<float> load_image(const string& path)
 {
-    ifstream file(path, ios::binary);
+    // If input is a PNG, use an external Python helper to convert it to
+    // a 28x28 grayscale raw byte file, then read the bytes.
+    auto ends_with = [](const string &s, const string &suffix) {
+        if (s.size() < suffix.size()) return false;
+        return s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+    };
+
+    string lower = path;
+    for (auto &c : lower) c = static_cast<char>(tolower((unsigned char)c));
+
+    string raw_path = path + ".raw";
+    if (ends_with(lower, ".png")) {
+        // Call the Python converter in the same folder: convert_image.py
+        string cmd = "python convert_image.py \"" + path + "\" \"" + raw_path + "\"";
+        int ret = system(cmd.c_str());
+        if (ret != 0) {
+            throw runtime_error("Failed to convert PNG to raw bytes. Ensure Python and Pillow are installed.");
+        }
+    }
+
+    ifstream file(raw_path, ios::binary);
+    bool remove_raw_after = false;
     if (!file.is_open()) {
-        throw runtime_error("Failed to open image file: " + path);
+        // Fall back: try to open original path as raw bytes
+        file.open(path, ios::binary);
+        if (!file.is_open()) {
+            throw runtime_error("Failed to open image file: " + path);
+        }
+    } else {
+        remove_raw_after = true;
     }
 
     Tensor<float> img({1, 28, 28});
     unsigned char pix;
-
     for (int i = 0; i < 28; ++i) {
         for (int j = 0; j < 28; ++j) {
-            if (!file.read(reinterpret_cast<char*>(&pix), 1)) {
-                throw runtime_error("Failed to read image pixels");
+            if (!file.read(reinterpret_cast<char *>(&pix), 1)) {
+                file.close();
+                if (remove_raw_after) std::remove(raw_path.c_str());
+                throw runtime_error("Failed to read image pixels (expected 28x28 raw bytes)");
             }
             img(0, i, j) = static_cast<float>(pix) / 255.0f;
         }
     }
 
     file.close();
+    if (remove_raw_after) std::remove(raw_path.c_str());
     return img;
 }
 
