@@ -203,18 +203,24 @@ public:
             throw out_of_range("slice参数非法");
         }
         vector<size_t> new_shape=_shape;
-        new_shape[dim] =end-begin;
+        new_shape[dim] = end - begin;
         Tensor<T> out(new_shape);
 
-        size_t step=_strides[dim];
-        size_t block_size=count_elements(_shape)/_shape[dim];
+        vector<size_t> idx(new_shape.size(), 0);
+        for (size_t i = 0; i < out.size(); ++i) {
+            size_t remaining = i;
+            for (int d = (int)new_shape.size() - 1; d >= 0; --d) {
+                idx[d] = remaining % new_shape[d];
+                remaining /= new_shape[d];
+            }
 
-        for (size_t i=0;i<end-begin;++i){
-            size_t src_off=(begin+i)*step;
-            size_t dst_off=i*step;
-            memcpy(out._data.data()+dst_off,
-                        _data.data()+src_off,
-                        block_size*sizeof(T));
+            vector<size_t> src_idx = idx;
+            src_idx[dim] += begin;
+            size_t src_flat = 0;
+            for (size_t d = 0; d < src_idx.size(); ++d) {
+                src_flat += src_idx[d] * _strides[d];
+            }
+            out._data[i] = _data[src_flat];
         }
         return out;
     }
@@ -374,6 +380,17 @@ public:
         Tensor<T> res(_shape);
         for(size_t i=0;i<_data.size();++i){
             res._data[i] = _data[i] * scalar;
+        }
+        return res;
+    }
+
+    Tensor<T> operator*(const Tensor<T>& other) const {
+        if (_shape != other._shape) {
+            throw invalid_argument("elementwise *: shapes must match");
+        }
+        Tensor<T> res(_shape);
+        for (size_t i = 0; i < _data.size(); ++i) {
+            res._data[i] = _data[i] * other._data[i];
         }
         return res;
     }

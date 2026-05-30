@@ -123,9 +123,10 @@ public:
 
         size_t B = x_shape[0];
         Tensor<float> output({B, 1, _hidden_dim});
+        Tensor<float> cls_token_with_pos = cls_token + pos_embedding.slice(1, 0, 1);
         for (size_t b = 0; b < B; ++b) {
             for (size_t i = 0; i < _hidden_dim; ++i) {
-                output(b, 0, i) = cls_token(0, 0, i);
+                output(b, 0, i) = cls_token_with_pos(0, 0, i);
             }
         }
 
@@ -147,20 +148,39 @@ public:
 };
 
 class LayerNorm : public Layer {
+private:
+    Tensor<float> _gamma;
+    Tensor<float> _beta;
+
+    Tensor<float> broadcast_to(const Tensor<float>& tensor, const vector<size_t>& target_shape) const {
+        Tensor<float> out = tensor;
+        while (out.rank() < target_shape.size()) {
+            out = out.unsqueeze(0);
+        }
+        return out.broadcast(target_shape);
+    }
+
 public:
+    LayerNorm() = default;
+    LayerNorm(const Tensor<float>& gamma, const Tensor<float>& beta)
+        : _gamma(gamma), _beta(beta) {}
+
+    void set_weights(const Tensor<float>& gamma, const Tensor<float>& beta) {
+        _gamma = gamma;
+        _beta = beta;
+    }
+
     Tensor<float> forward(const Tensor<float>& x) override {
         Tensor<float> out = x;
         size_t last_dim = x.shape().back();
         size_t outer = x.size() / last_dim;
         
         for (size_t o = 0; o < outer; ++o) {
-            // 计算均值
             float mean = 0.0f;
             for (size_t i = 0; i < last_dim; ++i)
                 mean += out[o * last_dim + i];
             mean /= last_dim;
             
-            // 计算方差
             float var = 0.0f;
             for (size_t i = 0; i < last_dim; ++i) {
                 float diff = out[o * last_dim + i] - mean;
@@ -168,10 +188,15 @@ public:
             }
             var /= last_dim;
             
-            // 归一化
             float std = std::sqrt(var + 1e-5f);
             for (size_t i = 0; i < last_dim; ++i)
                 out[o * last_dim + i] = (out[o * last_dim + i] - mean) / std;
+        }
+
+        if (_gamma.size() && _beta.size()) {
+            Tensor<float> gamma_b = broadcast_to(_gamma, out.shape());
+            Tensor<float> beta_b = broadcast_to(_beta, out.shape());
+            out = out * gamma_b + beta_b;
         }
         return out;
     }
@@ -260,9 +285,7 @@ private:
         Tensor<float> out = x;
         for (size_t i = 0; i < out.size(); ++i) {
             float v = out[i];
-            float c = std::sqrt(2.0f / 3.1415926f);
-            float x3 = v * v * v;
-            out[i] = 0.5f * v * (1.0f + std::tanh(c * (v + 0.044715f * x3)));
+            out[i] = 0.5f * v * (1.0f + std::erf(v / std::sqrt(2.0f)));
         }
         return out;
     }
@@ -310,6 +333,12 @@ public:
                          const Tensor<float>& fc2_weight, const Tensor<float>& fc2_bias) {
         _mlp.set_fc1(fc1_weight, fc1_bias);
         _mlp.set_fc2(fc2_weight, fc2_bias);
+    }
+
+    void set_norm_weights(const Tensor<float>& gamma1, const Tensor<float>& beta1,
+                          const Tensor<float>& gamma2, const Tensor<float>& beta2) {
+        _norm1.set_weights(gamma1, beta1);
+        _norm2.set_weights(gamma2, beta2);
     }
 
     Tensor<float> forward(const Tensor<float>& x) override {
@@ -381,10 +410,25 @@ public:
 
     Tensor<float> forward(const Tensor<float>& x) override {
         Tensor<float> tokens = _patch_embed.forward(x);
+#ifdef DEBUG_VT
+        cerr << "[DEBUG] cls after patch embed:";
+        auto cls0 = tokens.slice(1, 0, 1).reshaped({tokens.shape()[0], _hidden_dim});
+        for (size_t i = 0; i < min((size_t)8, _hidden_dim); ++i) cerr << " " << cls0[i];
+        cerr << endl;
+#endif
+        size_t layer_idx = 0;
         for (auto& block : _blocks) {
             tokens = block.forward(tokens);
+#ifdef DEBUG_VT
+            cerr << "[DEBUG] cls after block " << layer_idx << ":";
+            auto cls_l = tokens.slice(1, 0, 1).reshaped({tokens.shape()[0], _hidden_dim});
+            for (size_t i = 0; i < min((size_t)8, _hidden_dim); ++i) cerr << " " << cls_l[i];
+            cerr << endl;
+            layer_idx++;
+#endif
         }
-        tokens = _norm.forward(tokens);
+        // Final normalization removed because no matching weights are provided in the weight bundle.
+        // tokens = _norm.forward(tokens);
 
         size_t batch_size = tokens.shape()[0];
         Tensor<float> cls_token = tokens.slice(1, 0, 1);

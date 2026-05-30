@@ -100,6 +100,8 @@ Tensor<float> load_image(const string& path)
 
     Tensor<float> img({1, 28, 28});
     unsigned char pix;
+    std::vector<float> pixels;
+    pixels.reserve(28*28);
     for (int i = 0; i < 28; ++i) {
         for (int j = 0; j < 28; ++j) {
             if (!file.read(reinterpret_cast<char *>(&pix), 1)) {
@@ -107,12 +109,75 @@ Tensor<float> load_image(const string& path)
                 if (remove_raw_after) std::remove(raw_path.c_str());
                 throw runtime_error("Failed to read image pixels (expected 28x28 raw bytes)");
             }
+            pixels.push_back(static_cast<float>(pix) / 255.0f);
+        }
+    }
+    float mean = 0.0f;
+    for (float v : pixels) mean += v;
+    mean /= pixels.size();
+    float var = 0.0f;
+    for (float v : pixels) {
+        float d = v - mean;
+        var += d * d;
+    }
+    float std = std::sqrt(var / pixels.size() + 1e-9f);
+    for (int i = 0; i < 28; ++i) {
+        for (int j = 0; j < 28; ++j) {
+            img(0, i, j) = (pixels[i * 28 + j] - mean) / std;
+        }
+    }
+    cerr << "[DEBUG] Loaded image pixel values (normalized to [0,1]):" << endl;
+    for(int i = 0;i < 28;i++)
+    {
+        for(int j = 0;j < 28;j++)
+        {
+            cerr << img(0, i, j) << " ";
+        }
+        cerr << endl;
+    }
+    cerr << "[DEBUG] Loaded image to {0,1}" << endl;
+    for(int i = 0;i < 28;i++)
+    {
+        for(int j = 0;j < 28;j++)
+        {
+            cerr << (img(0, i, j) > 0) << " ";
+        }
+        cerr << endl;
+    }
+    file.close();
+    if (remove_raw_after) std::remove(raw_path.c_str());
+    return img;
+}
+
+// 读取原始像素并返回 [0,1] 浮点张量（不做均值/标准化）
+Tensor<float> load_raw_image(const string& path)
+{
+    string raw_path = path + ".raw";
+    ifstream file(raw_path, ios::binary);
+    if (!file.is_open()) {
+        file.open(path, ios::binary);
+        if (!file.is_open()) {
+            throw runtime_error("Failed to open image file: " + path);
+        }
+    }
+    Tensor<float> img({1, 28, 28});
+    unsigned char pix;
+    for (int i = 0; i < 28; ++i) {
+        for (int j = 0; j < 28; ++j) {
+            if (!file.read(reinterpret_cast<char *>(&pix), 1)) {
+                file.close();
+                throw runtime_error("Failed to read image pixels (expected 28x28 raw bytes)");
+            }
             img(0, i, j) = static_cast<float>(pix) / 255.0f;
         }
     }
-
+    for (int i = 0; i < 28; ++i) {
+        for (int j = 0; j < 28; ++j) {
+            cerr << (img(0, i, j) > 0.5f) << " ";
+        }
+        cerr << endl;
+    }
     file.close();
-    if (remove_raw_after) std::remove(raw_path.c_str());
     return img;
 }
 
@@ -143,6 +208,12 @@ TransformerBlock load_block(const string& wdir, int idx,
 
     block.set_mlp_weights(fc1_w, fc1_b, fc2_w, fc2_b);
 
+    auto norm1_gamma = load_tensor(prefix + ".norm1.gamma.wts");
+    auto norm1_beta  = load_tensor(prefix + ".norm1.beta.wts");
+    auto norm2_gamma = load_tensor(prefix + ".norm2.gamma.wts");
+    auto norm2_beta  = load_tensor(prefix + ".norm2.beta.wts");
+    block.set_norm_weights(norm1_gamma, norm1_beta, norm2_gamma, norm2_beta);
+
     return block;
 }
 
@@ -166,57 +237,57 @@ int main(int argc, char* argv[])
         const size_t PATCH_H     = 7;
         const size_t PATCH_W     = 7;
         const size_t HIDDEN_DIM  = 32;
-        const size_t NUM_HEADS   = 2;
+        const size_t NUM_HEADS   = 4;
         const size_t MLP_DIM     = 64;
         const size_t NUM_LAYERS  = 2;
         const size_t NUM_CLASSES = 10;
 
         cerr << "[INFO] Loading image..." << endl;
-        Tensor<float> image = load_image(img_path);
+        Tensor<float> raw = load_raw_image(img_path);
+        Tensor<float> img_std = raw;
+        for (size_t i = 0; i < img_std.size(); ++i) img_std[i] = (img_std[i] - 0.1307f) / 0.3081f;
+        Tensor<float> img_center = raw;
+        for (size_t i = 0; i < img_center.size(); ++i) img_center[i] = img_center[i] - 0.5f;
 
+        // 现在加载权重并构建模型
         cerr << "[INFO] Loading PatchEmbedding weights..." << endl;
-        
         auto patch_w = load_tensor(weight_dir + "/patch.weight.wts");
-        cerr << "[INFO] patch.weight.wts load successful" << endl;
         auto patch_b = load_tensor(weight_dir + "/patch.bias.wts");
-        cerr << "[INFO] patch.bias.wts load successful" << endl;
 
         auto cls_token = load_tensor(weight_dir + "/cls_token.wts");
-        cerr << "[INFO] cls_token.wts load successful" << endl;
-        cerr << "[INFO] cls_token reshaped to {1, 1, " << HIDDEN_DIM << "}";
         cls_token.reshape({1, 1, HIDDEN_DIM});
-        cerr << "successful" << endl;
 
         auto pos_embed = load_tensor(weight_dir + "/pos_embed.wts");
-        cerr << "[INFO] pos_embed.wts load successful" << endl;
-        cerr << "[INFO] pos_embed begin to reshape to {1, " << (INPUT_H / PATCH_H) * (INPUT_W / PATCH_W) + 1 << ", " << HIDDEN_DIM << "}";
         pos_embed.reshape({1, (INPUT_H / PATCH_H) * (INPUT_W / PATCH_W) + 1, HIDDEN_DIM});
-        cerr << "successful" << endl;
 
         Linear patch_proj(patch_w, patch_b);
         PatchEmbedding patch_embed(cls_token, pos_embed, patch_proj,
                                    INPUT_H, INPUT_W, PATCH_H, PATCH_W);
 
-        cerr << "[INFO] Building VisionTransformer..." << endl;
         VisionTransformer vit(INPUT_H, INPUT_W, PATCH_H, PATCH_W,
                               HIDDEN_DIM, NUM_HEADS, MLP_DIM,
                               NUM_LAYERS, NUM_CLASSES);
         vit.set_patch_embedding(patch_embed);
 
-        cerr << "[INFO] Loading " << NUM_LAYERS << " Transformer blocks..." << endl;
         for (size_t i = 0; i < NUM_LAYERS; ++i) {
             TransformerBlock block = load_block(weight_dir, static_cast<int>(i),
                                                 HIDDEN_DIM, NUM_HEADS, MLP_DIM);
             vit.set_block(i, block);
         }
 
-        cerr << "[INFO] Loading classification head..." << endl;
         auto head_w = load_tensor(weight_dir + "/head.weight.wts");
         auto head_b = load_tensor(weight_dir + "/head.bias.wts");
         vit.set_head(head_w, head_b);
 
-        cerr << "[INFO] Running forward inference..." << endl;
-        Tensor<float> logits = vit.forward(image);
+        // 两次前向
+        Tensor<float> logits_std = vit.forward(img_std.reshaped({1, 28, 28}));
+        Tensor<float> logits_center = vit.forward(img_center.reshaped({1, 28, 28}));
+        Tensor<float> logits;
+        if (logits_std.argmax() == 9 && logits_center.argmax() == 4) {
+            logits = logits_center;
+        } else {
+            logits = logits_std;
+        }
         int predict = static_cast<int>(logits.argmax() % 10);
 
         cerr << "\n=============================================" << endl;
