@@ -248,6 +248,7 @@ int main(int argc, char* argv[])
         for (size_t i = 0; i < img_std.size(); ++i) img_std[i] = (img_std[i] - 0.1307f) / 0.3081f;
         Tensor<float> img_center = raw;
         for (size_t i = 0; i < img_center.size(); ++i) img_center[i] = img_center[i] - 0.5f;
+        
 
         // 现在加载权重并构建模型
         cerr << "[INFO] Loading PatchEmbedding weights..." << endl;
@@ -300,6 +301,7 @@ int main(int argc, char* argv[])
         }
         cerr << "\n=============================================" << endl;
         cerr << "[INFO] Inference completed!" << endl;
+        cout << predict << endl;
 
     } catch (const exception& e) {
         cerr << "\n[ERROR] Exception occurred:" << endl;
