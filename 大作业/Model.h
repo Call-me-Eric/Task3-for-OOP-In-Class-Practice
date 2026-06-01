@@ -427,8 +427,7 @@ public:
             layer_idx++;
 #endif
         }
-        // Final normalization removed because no matching weights are provided in the weight bundle.
-        // tokens = _norm.forward(tokens);
+        tokens = _norm.forward(tokens);
 
         size_t batch_size = tokens.shape()[0];
         Tensor<float> cls_token = tokens.slice(1, 0, 1);

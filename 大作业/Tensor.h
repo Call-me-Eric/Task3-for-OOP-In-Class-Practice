@@ -376,10 +376,30 @@ public:
         return res;
     }
 
+    Tensor<T> operator-(const Tensor<T>& other) const {
+        return *this + (other * T(-1));
+    }
+
     Tensor<T> operator*(T scalar) const{
         Tensor<T> res(_shape);
         for(size_t i=0;i<_data.size();++i){
             res._data[i] = _data[i] * scalar;
+        }
+        return res;
+    }
+
+    Tensor<T> operator+(T scalar) const {
+        Tensor<T> res(_shape);
+        for(size_t i=0;i<_data.size();++i){
+            res._data[i] = _data[i] + scalar;
+        }
+        return res;
+    }
+
+    Tensor<T> operator-(T scalar) const {
+        Tensor<T> res(_shape);
+        for(size_t i=0;i<_data.size();++i){
+            res._data[i] = _data[i] - scalar;
         }
         return res;
     }

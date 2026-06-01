@@ -9,9 +9,11 @@
 #include <cstdlib>
 
 #include "Model.h"
+#include <filesystem>
 
 using namespace std;
 
+int debug;
 Tensor<float> load_tensor(const string& filepath)
 {
     ifstream file(filepath);
@@ -50,7 +52,7 @@ Tensor<float> load_tensor(const string& filepath)
     Tensor<float> tensor(shape);
 
     if (data.size() != tensor.size()) {
-        cerr << "[WARN] " << filepath << ": expected " << tensor.size()
+        if(debug)cerr << "[WARN] " << filepath << ": expected " << tensor.size()
              << " values but got " << data.size() << endl;
     }
     size_t n = min(data.size(), tensor.size());
@@ -126,23 +128,26 @@ Tensor<float> load_image(const string& path)
             img(0, i, j) = (pixels[i * 28 + j] - mean) / std;
         }
     }
-    cerr << "[DEBUG] Loaded image pixel values (normalized to [0,1]):" << endl;
-    for(int i = 0;i < 28;i++)
+    if(debug)
     {
-        for(int j = 0;j < 28;j++)
+        cerr << "[DEBUG] Loaded image pixel values (normalized to [0,1]):" << endl;
+        for(int i = 0;i < 28;i++)
         {
-            cerr << img(0, i, j) << " ";
+            for(int j = 0;j < 28;j++)
+            {
+                cerr << img(0, i, j) << " ";
+            }
+            cerr << endl;
         }
-        cerr << endl;
-    }
-    cerr << "[DEBUG] Loaded image to {0,1}" << endl;
-    for(int i = 0;i < 28;i++)
-    {
-        for(int j = 0;j < 28;j++)
+        cerr << "[DEBUG] Loaded image to {0,1}" << endl;
+        for(int i = 0;i < 28;i++)
         {
-            cerr << (img(0, i, j) > 0) << " ";
+            for(int j = 0;j < 28;j++)
+            {
+                cerr << (img(0, i, j) > 0) << " ";
+            }
+            cerr << endl;
         }
-        cerr << endl;
     }
     file.close();
     if (remove_raw_after) std::remove(raw_path.c_str());
@@ -171,11 +176,13 @@ Tensor<float> load_raw_image(const string& path)
             img(0, i, j) = static_cast<float>(pix) / 255.0f;
         }
     }
-    for (int i = 0; i < 28; ++i) {
-        for (int j = 0; j < 28; ++j) {
-            cerr << (img(0, i, j) > 0.5f) << " ";
+    if(debug){
+        for (int i = 0; i < 28; ++i) {
+            for (int j = 0; j < 28; ++j) {
+                cerr << (img(0, i, j) > 0.5f) << " ";
+            }
+            cerr << endl;
         }
-        cerr << endl;
     }
     file.close();
     return img;
@@ -222,15 +229,19 @@ TransformerBlock load_block(const string& wdir, int idx,
 // ==============================
 int main(int argc, char* argv[])
 {
-    if (argc < 3) {
+    if (argc < 2) {
         cerr << "Usage: " << endl;
-        cerr << "  " << argv[0] << " <image_path> <weight_dir>" << endl;
+        cerr << "  " << argv[0] << " <image_path> [weight_dir] [0/1 debug]" << endl;
+        cerr << "Examples:" << endl;
+        cerr << "  " << argv[0] << " tests/test_0000_label_1.raw weights 0" << endl;
         return 1;
     }
 
     try {
         string img_path = argv[1];
-        string weight_dir = argv[2];
+        // 默认：使用微调后的权重目录
+        string weight_dir = (argc >= 3 ? string(argv[2]) : string("weights_finetuned_norm"));
+        int _debug = (argc >= 4 ? atoi(argv[3]) : 0); debug = _debug;
 
         const size_t INPUT_H     = 28;
         const size_t INPUT_W     = 28;
@@ -242,16 +253,15 @@ int main(int argc, char* argv[])
         const size_t NUM_LAYERS  = 2;
         const size_t NUM_CLASSES = 10;
 
-        cerr << "[INFO] Loading image..." << endl;
+        if(debug)cerr << "[INFO] Loading image..." << endl;
         Tensor<float> raw = load_raw_image(img_path);
         Tensor<float> img_std = raw;
-        for (size_t i = 0; i < img_std.size(); ++i) img_std[i] = (img_std[i] - 0.1307f) / 0.3081f;
-        Tensor<float> img_center = raw;
-        for (size_t i = 0; i < img_center.size(); ++i) img_center[i] = img_center[i] - 0.5f;
-        
+        for (size_t i = 0; i < img_std.size(); ++i) {
+            img_std[i] = (img_std[i] - 0.1307f) / 0.3081f;
+        }
 
         // 现在加载权重并构建模型
-        cerr << "[INFO] Loading PatchEmbedding weights..." << endl;
+        if(debug)cerr << "[INFO] Loading PatchEmbedding weights..." << endl;
         auto patch_w = load_tensor(weight_dir + "/patch.weight.wts");
         auto patch_b = load_tensor(weight_dir + "/patch.bias.wts");
 
@@ -280,27 +290,45 @@ int main(int argc, char* argv[])
         auto head_b = load_tensor(weight_dir + "/head.bias.wts");
         vit.set_head(head_w, head_b);
 
-        // 两次前向
-        Tensor<float> logits_std = vit.forward(img_std.reshaped({1, 28, 28}));
-        Tensor<float> logits_center = vit.forward(img_center.reshaped({1, 28, 28}));
-        Tensor<float> logits;
-        if (logits_std.argmax() == 9 && logits_center.argmax() == 4) {
-            logits = logits_center;
-        } else {
-            logits = logits_std;
+        // also compute center preprocess and use confidence-based selection
+        Tensor<float> img_center = raw;
+        for (size_t i = 0; i < img_center.size(); ++i) {
+            img_center[i] = img_center[i] - 0.5f;
         }
-        int predict = static_cast<int>(logits.argmax() % 10);
 
-        cerr << "\n=============================================" << endl;
-        cerr << "           MNIST Digit Recognition Result     " << endl;
-        cerr << "=============================================" << endl;
-        cerr << "Predicted digit: " << predict << endl;
-        cerr << "Raw logits:     ";
-        for (size_t i = 0; i < 10; ++i) {
-            cerr << logits[i] << "  ";
+        Tensor<float> logits_std = vit.forward(img_std.reshaped({1, 28, 28}));
+        Tensor<float> logits_ctr = vit.forward(img_center.reshaped({1, 28, 28}));
+
+        int pred_std = static_cast<int>(logits_std.argmax() % 10);
+        int pred_ctr = static_cast<int>(logits_ctr.argmax() % 10);
+        int predict = pred_std;
+        if (pred_std == pred_ctr) {
+            predict = pred_std;
+        } else {
+            // compute softmax max confidence for each
+            Tensor<float> prob_std = logits_std.softmax(logits_std.rank() - 1);
+            Tensor<float> prob_ctr = logits_ctr.softmax(logits_ctr.rank() - 1);
+            float max_std = 0.0f, max_ctr = 0.0f;
+            // logits are shape {10} (flattened)
+            for (size_t i = 0; i < 10; ++i) {
+                if (prob_std[i] > max_std) max_std = prob_std[i];
+                if (prob_ctr[i] > max_ctr) max_ctr = prob_ctr[i];
+            }
+            if (max_ctr > max_std) predict = pred_ctr;
+            else predict = pred_std;
         }
-        cerr << "\n=============================================" << endl;
-        cerr << "[INFO] Inference completed!" << endl;
+
+        if(debug)cerr << "\n=============================================" << endl;
+        if(debug)cerr << "           MNIST Digit Recognition Result     " << endl;
+        if(debug)cerr << "=============================================" << endl;
+        if(debug)cerr << "Predicted digit: " << predict << endl;
+        if(debug)cerr << "Raw logits:     ";
+        Tensor<float> logits_final = (predict == pred_std) ? logits_std : logits_ctr;
+        for (size_t i = 0; i < 10; ++i) {
+            if(debug)cerr << logits_final[i] << "  ";
+        }
+        if(debug)cerr << "\n=============================================" << endl;
+        if(debug)cerr << "[INFO] Inference completed!" << endl;
         cout << predict << endl;
 
     } catch (const exception& e) {

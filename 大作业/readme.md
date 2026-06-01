@@ -16,30 +16,26 @@ Tensor.h 由 @linnnn 完成
 Model.h 由 @Call\_me\_Eric 完成
 main.cpp 由 @bianbiandaren 完成
 
-## 每个部分需要完成的接口
+## 使用方法：
 
-### tensor.h
+通过g++ main.cpp -o main -O2 -std=c++20来编译可执行文件main
 
-需要完成所有pdf中出现的接口。
+使用规则：
 
-有待补充$\dots$
+```cpp
+./main <test_file_path> <weight_file_pait> <output_DEBUG>
+```
 
-### model.h
+example：
 
-需要完成：
+```cpp
+./main 1.raw weights 0
+```
 
-1. Layer 抽象基类 done
-2. Linear 线性层类（用于完成“仿射变换”）done
-3. PatchEmbedding 类（用于将$28\times 28$的灰度图转换成32维向量）done
-   1. 根据助教说，cls_token等会提前给出，可能需要写main.cpp的同学对接一下
-4. LayerNorm 类（用于做矩阵乘法和加法的线性变换）
-5. MultiHeadAttention 类（还没看）
-6. 前馈网络类(MLP)（还没看）
-7. Transformer 编码器块(TransformerBlock)（还没看）
-8. VisionTransformer 类（还没看）
+将会尝试打开1.raw并预测，由于DEBUG参数是0，不会输出任何DEBUG信息，仅一行输出答案。
 
-### main.cpp
+特别的，如果不输入DEBUG参数，默认参数为0。
 
-需要完成 WeightLoader，与助教确认前端的交互界面。
+如果不想手动手写文件，那么可以用/mnist_raw/tests中的数据。
 
-需要统筹计划模型如何训练，以及套一层壳之类的。
+不过，由于weights并没有非常nb的泛化，亲自手写可能会导致问题。
