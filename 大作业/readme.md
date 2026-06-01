@@ -39,3 +39,5 @@ example：
 如果不想手动手写文件，那么可以用/mnist_raw/tests中的数据。
 
 不过，由于weights并没有非常nb的泛化，亲自手写可能会导致问题。
+
+或者直接跑evaluate_test_data.py，它会自动跑/mnist_raw/tests的数据，然后给出成功率。
